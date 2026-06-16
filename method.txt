@@ -1,0 +1,368 @@
+Anomaly Detection Method Plan
+=============================
+
+Goal
+----
+Build a medical anomaly detection system that learns a normal anatomical
+manifold through analytical decomposition and restoration.
+
+The key idea is not classification.
+
+The key idea is:
+
+    train on normal images only
+    learn how normal images decompose
+    learn how perturbed normal images are restored back to normal
+    at test time, anomalous images should be "corrected" toward normal
+    use the amount of correction as the anomaly score
+
+
+High-Level Intuition
+--------------------
+For a normal image:
+
+    input image ~= restored image
+
+so:
+
+    MSE(input, restored) should be low
+
+For an anomalous image:
+
+    the model only knows how to map images toward the normal manifold
+    so it will try to "fix" the anomaly
+
+therefore:
+
+    restored image differs from input image
+
+so:
+
+    MSE(input, restored) should be high
+
+This is closer to pseudo-healthy restoration than plain reconstruction failure.
+
+
+Target Domain
+-------------
+Primary target domain:
+
+    medical anomaly detection
+
+Most likely starting datasets:
+
+    brain MRI
+    chest X-ray
+    retinal fundus later if needed
+
+Why medical:
+
+    strong normal anatomical manifold
+    large supply of normal data
+    restoration-to-normal is meaningful
+    anomaly can be interpreted as deviation from healthy structure
+
+
+Reference Papers
+----------------
+1. MedIAnomaly
+
+Use for:
+
+    datasets
+    benchmark protocol
+    evaluation metrics
+    baseline comparison structure
+
+2. Reversed Auto-Encoders (RA)
+
+Use for:
+
+    pseudo-healthy restoration intuition
+    scoring based on input vs restored output
+    conceptual framing of normal-manifold projection
+
+
+Core Architecture
+-----------------
+Use the original step-down decoder + fusion decoder direction, not the
+classification-oriented coefficient-bank direction.
+
+Input and internal structure:
+
+    image -> decomposition-related model -> 8 analytical views
+          -> fusion decoder -> restored RGB image
+
+The 8 decomposition families are:
+
+    y_coarse_fill
+    y_mid_fill
+    y_edge_detail
+    y_texture_detail
+    cb_fill
+    cb_detail
+    cr_fill
+    cr_detail
+
+These are the main analytical supervision targets.
+
+
+Training Strategy
+-----------------
+Train in two stages.
+
+
+Stage 1: Clean Normal Decomposition Learning
+--------------------------------------------
+Train only on normal images.
+
+For each normal image:
+
+    compute the clean analytical decomposition targets
+    train the model to reconstruct the decomposition maps
+    train the fusion decoder to reconstruct the clean RGB image
+
+Purpose:
+
+    learn what normal images look like in decomposition space
+    learn how normal decomposition views combine into a normal RGB image
+    learn the grammar of normal edge / fill / texture / chroma structure
+
+Stage 1 losses:
+
+    per-decomposition reconstruction loss
+    fusion RGB reconstruction loss
+
+These targets are the clean ground-truth decomposition maps and clean image.
+
+
+Stage 2: Perturbation-to-Normal Restoration Learning
+----------------------------------------------------
+Still train only on normal images.
+
+For each normal image:
+
+    create multiple perturbed versions
+    include placebo / identity / mild perturbation views
+    feed the perturbed image to the model
+    ask it to reconstruct the clean decomposition maps
+    ask it to reconstruct the clean fused RGB image
+
+Purpose:
+
+    teach the model to undo deviations
+    teach the model to project images back to the normal manifold
+    make the model behave like a normalizing restorer
+
+Important:
+
+    the perturbations must be hard enough to require learning
+    but not so destructive that the model collapses or memorizes
+
+
+Perturbation Strategy
+---------------------
+The perturbation pipeline should be compatible with decomposition-based
+restoration and should affect multiple analytical families.
+
+The fixed composed perturbation idea currently used is:
+
+    gaussian blur
+    gaussian noise
+    color jitter
+    center mask
+
+Rationale:
+
+    blur pressures Y edge / texture restoration
+    noise pressures detail restoration
+    color jitter pressures Cb / Cr restoration
+    center mask pressures fill / structural completion
+
+Possible future variants:
+
+    multiple perturbation strengths
+    multiple perturbation families per image
+    placebo / identity branch
+    perturbation curriculum
+
+
+What the Model Should Learn
+---------------------------
+Stage 1 teaches:
+
+    how normal images decompose
+    how normal views re-fuse
+
+Stage 2 teaches:
+
+    how corrupted normal images are restored back to normal
+
+Combined effect:
+
+    anomalous images at test time should be pulled toward the learned
+    normal manifold
+
+
+Inference-Time Behavior
+-----------------------
+At test time:
+
+    feed a raw test image to the trained restorer
+    get restored decomposition maps
+    get restored fused RGB image
+
+Main anomaly score:
+
+    MSE(input_image, restored_image)
+
+Reason:
+
+    normal image -> little change -> low score
+    anomalous image -> larger correction toward normal -> high score
+
+
+Optional Additional Scores
+--------------------------
+Besides RGB MSE, later versions can also use:
+
+    per-decomposition reconstruction shift
+    residual energy
+    fusion inconsistency
+    perceptual difference between input and restored image
+    decomposition-space difference between input decomposition and restored decomposition
+
+Possible combined score:
+
+    anomaly_score =
+        alpha * RGB_MSE(input, restored)
+      + beta  * decomposition_shift
+      + gamma * residual_energy
+      + delta * fusion_inconsistency
+
+But the first version should keep the main score simple:
+
+    RGB MSE(input, restored)
+
+
+Evaluation Protocol
+-------------------
+Follow MedIAnomaly-style evaluation as closely as possible.
+
+Use:
+
+    image-level anomaly classification metrics:
+        AUC
+        AP
+
+    pixel-level anomaly segmentation metrics if maps are available:
+        APpix
+        best Dice
+
+Evaluation framing:
+
+    compare against benchmark baselines reported in MedIAnomaly
+    use their dataset/task framing where possible
+
+
+Dataset Strategy
+----------------
+Preferred starting datasets:
+
+1. Brain MRI
+
+    strongest conceptual fit for restoration-to-normal
+    strong anatomical prior
+
+2. Chest X-ray
+
+    easy to obtain a large normal-only set
+    clinically meaningful normal-vs-abnormal manifold
+
+3. Retinal fundus later
+
+    useful after pipeline is stable
+
+Do not start with generic classification datasets for this method.
+
+
+What This Is Not
+----------------
+This is not:
+
+    a plain classifier
+    a coefficient-bank classification project
+    a normal autoencoder judged only by reconstruction failure
+
+This is:
+
+    a normal-manifold restoration model with analytical decomposition supervision
+
+
+What Happened in Earlier Exploration
+------------------------------------
+The coefficient-bank / probe direction was explored and was useful for learning,
+but it is not the main intended endpoint anymore.
+
+Why it was deprioritized:
+
+    classification performance was weak
+    the architecture is more naturally aligned with reconstruction / restoration
+    the decomposition views are more suitable for anomaly modeling than for
+    semantic class separation
+
+
+Concrete End-to-End Pipeline
+----------------------------
+Offline preprocessing:
+
+    1. collect normal training images
+    2. compute analytical decomposition targets
+    3. create perturbed training views
+
+Stage 1 training:
+
+    input: clean normal image
+    target: clean decomposition maps + clean RGB
+
+Stage 2 training:
+
+    input: perturbed normal image
+    target: clean decomposition maps + clean RGB
+
+Inference:
+
+    input: raw test image
+    output: restored image + restored decomposition maps
+
+Scoring:
+
+    anomaly score = MSE(input, restored)
+
+Expected behavior:
+
+    normal input -> low score
+    abnormal input -> high score
+
+
+Paper Framing
+-------------
+Method summary:
+
+    We train a decomposition-aware restoration model exclusively on normal
+    medical images. The model first learns analytical decomposition and fusion
+    of clean normal images, then learns to restore perturbed normal images back
+    to their clean decomposition and fused form. At test time, anomalous inputs
+    are projected toward the learned normal manifold, and anomaly severity is
+    measured by the discrepancy between the input and its restored output.
+
+
+Immediate Next Implementation Direction
+---------------------------------------
+1. Finalize medical dataset choice from MedIAnomaly
+2. Bring back / rewrite the original step-down + fusion architecture for the
+   8 decomposition views
+3. Implement Stage 1 normal-only decomposition + fusion training
+4. Implement Stage 2 perturbation-to-normal restoration training
+5. Implement test-time RGB MSE(input, restored)
+6. Add decomposition-side anomaly maps later if needed
