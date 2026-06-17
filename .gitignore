@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+/checkpoints
+/lightning_logs
+/plots
+/logs

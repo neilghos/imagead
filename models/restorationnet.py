@@ -1,8 +1,14 @@
 import torch
 import torch.nn as nn
-from encoder import Encoder
-from decompose_net import Decomposenet
-from fuser import FusionDecoder
+
+try:
+    from models.encoder import Encoder
+    from models.decompose_net import Decomposenet
+    from models.fuser import FusionDecoder
+except ImportError:
+    from encoder import Encoder
+    from decompose_net import Decomposenet
+    from fuser import FusionDecoder
 
 class AnalyticalRestorationNet(nn.Module):
     def __init__(self, in_channels=3, num_decomp_maps=8):

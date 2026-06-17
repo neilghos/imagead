@@ -32,6 +32,11 @@ DECOMPOSITION_CACHE_ROOT = "/data/cache/decompositions/mvtec/ycbcr"
 PRECOMPUTE_SCRIPT = "/data/stepdown vision/decomposition/precompute_decomposition.py"
 
 
+def _class_cache_root(cache_root: str, cls: str) -> Path:
+    cache_root_path = Path(cache_root)
+    return cache_root_path.parent / cls / cache_root_path.name
+
+
 def _decomposition_path(class_root: str, image_path: str, cache_root: str) -> Path:
     relative = Path(image_path).relative_to(Path(class_root)).with_suffix(".pt")
     return Path(cache_root) / relative
@@ -63,9 +68,9 @@ def _cache_matches_size(cache_root: str, expected_size: int) -> bool:
 
 def _ensure_decomposition_cache(cls: str, source: str, cache_root: str, image_size: int):
     class_root = Path(source) / cls
-    cache_root_path = Path(cache_root)
+    cache_root_path = _class_cache_root(cache_root, cls)
     expected_dirs = [cache_root_path / "train", cache_root_path / "test"]
-    if all(path.exists() for path in expected_dirs) and _cache_matches_size(cache_root, image_size):
+    if all(path.exists() for path in expected_dirs) and _cache_matches_size(str(cache_root_path), image_size):
         return
 
     command = [
@@ -184,7 +189,7 @@ class MVTecTrainDataset(ImageFolder):
         self.cls = cls
         self.source = source
         self.class_root = str(Path(source) / cls)
-        self.cache_root = cache_root
+        self.cache_root = str(_class_cache_root(cache_root, cls))
         self.size = imagesize
 
     def __getitem__(self, index):
@@ -242,7 +247,7 @@ class MVTecTestDataset(ImageFolder):
         self.cls = cls
         self.source = source
         self.class_root = str(Path(source) / cls)
-        self.cache_root = cache_root
+        self.cache_root = str(_class_cache_root(cache_root, cls))
         self.size = imagesize
 
     def __getitem__(self, index):
