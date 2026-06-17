@@ -63,22 +63,19 @@ class ColorPerturber:
         }
 
     def _foreground_mask(self, image: np.ndarray) -> np.ndarray:
-        if self.domain == "medical":
-            return np.ones(image.shape[:2], dtype=bool)
+            if self.domain == "medical":
+                return np.ones(image.shape[:2], dtype=bool)
+                
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             
-        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        
-        # Robust background check: evaluate the entire border, not just the absolute corners
-        border_pixels = np.concatenate([thresh[0, :], thresh[-1, :], thresh[:, 0], thresh[:, -1]])
-        if np.mean(border_pixels) > 127:
-            thresh = cv2.bitwise_not(thresh)
-            
-        mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-        if mask.mean() < 0.02 or mask.mean() > 0.98:
-            return np.ones_like(mask, dtype=bool)
-        return mask.astype(bool)
+            # The foolproof corner check that we know works perfectly
+            if thresh[0, 0] == 255 and thresh[-1, -1] == 255:
+                thresh = cv2.bitwise_not(thresh)
+                
+            mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+            return mask.astype(bool)
 
     def _sample_point_in_mask(self, mask: np.ndarray) -> tuple[int, int]:
         ys, xs = np.where(mask)
