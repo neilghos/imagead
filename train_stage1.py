@@ -12,13 +12,14 @@ from pytorch_lightning.callbacks import ModelCheckpoint, TQDMProgressBar
 from pytorch_lightning.loggers import CSVLogger
 
 from dataloader.datamodule import DATASETS_PATH, DECOMPOSITION_CACHE_ROOT, _CLASSNAMES
+from determinism import make_deterministic
 from stage1_module import Stage1DataModule, Stage1LightningModule
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mvtec-class", type=str, default="bottle")
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--image-size", type=int, default=224)
@@ -130,6 +131,7 @@ def run_single_class(args, mvtec_class: str):
         log_every_n_steps=1,
         logger=logger,
         num_sanity_val_steps=0,
+        deterministic=True,
     )
     trainer.fit(module, datamodule=datamodule)
     metrics_path = Path(logger.log_dir) / "metrics.csv"
@@ -144,8 +146,7 @@ def run_single_class(args, mvtec_class: str):
 
 def main():
     args = parse_args()
-    pl.seed_everything(args.seed, workers=True)
-    torch.set_float32_matmul_precision("high")
+    make_deterministic(args.seed)
 
     classes = _CLASSNAMES if args.mvtec_class == "all" else [args.mvtec_class]
     for index, mvtec_class in enumerate(classes, start=1):

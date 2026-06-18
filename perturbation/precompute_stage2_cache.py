@@ -15,6 +15,7 @@ if str(PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(PARENT_DIR))
 
 from dataloader.datamodule import DECOMPOSITION_CACHE_ROOT, DATASETS_PATH, _ensure_decomposition_cache
+from determinism import make_deterministic
 from decomposition import ycbcr_stack
 from perturbation.colorperturber import ColorPerturber
 from perturbation.surfaceperturber import SurfaceDamagePerturber
@@ -100,6 +101,7 @@ def _cache_complete(cache_root: Path, class_root: Path, samples: list[tuple[Path
 
 
 def precompute(args):
+    make_deterministic(args.seed)
     class_root = Path(args.data_root) / args.mvtec_class
     clean_cache_root = Path(args.clean_cache_root).parent / args.mvtec_class / Path(args.clean_cache_root).name
     stage2_cache_root = stage2_class_cache_root(args.stage2_cache_root, args.mvtec_class)

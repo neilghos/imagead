@@ -12,15 +12,36 @@ from pytorch_lightning.callbacks import ModelCheckpoint, TQDMProgressBar
 from pytorch_lightning.loggers import CSVLogger
 
 from dataloader.datamodule import DATASETS_PATH, DECOMPOSITION_CACHE_ROOT
+from determinism import make_deterministic
 from perturbation.precompute_stage2_cache import STAGE2_CACHE_ROOT
 from stage2_module import Stage2DataModule, Stage2LightningModule
+
+
+def resolve_stage1_checkpoint(mvtec_class: str, checkpoint_arg: str | None, stage1_root: str) -> str:
+    if checkpoint_arg:
+        return checkpoint_arg
+
+    class_root = Path(stage1_root) / mvtec_class
+    if not class_root.exists():
+        raise FileNotFoundError(f"Stage-1 checkpoint directory does not exist: {class_root}")
+
+    run_dirs = sorted([path for path in class_root.iterdir() if path.is_dir()])
+    if not run_dirs:
+        raise FileNotFoundError(f"No stage-1 runs found under: {class_root}")
+
+    latest_run = run_dirs[-1]
+    ckpts = sorted(latest_run.glob("*.ckpt"))
+    if not ckpts:
+        raise FileNotFoundError(f"No checkpoint files found under: {latest_run}")
+    return str(ckpts[-1])
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mvtec-class", type=str, default="bottle")
-    parser.add_argument("--stage1-checkpoint", type=str, required=True)
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--stage1-checkpoint", type=str, default=None)
+    parser.add_argument("--stage1-checkpoint-dir", type=str, default="/data/stepdown vision/checkpoints/stage1")
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--image-size", type=int, default=224)
@@ -88,8 +109,12 @@ def plot_recon_losses(metrics_path: Path, output_path: Path, mvtec_class: str):
 
 def main():
     args = parse_args()
-    pl.seed_everything(args.seed, workers=True)
-    torch.set_float32_matmul_precision("high")
+    make_deterministic(args.seed)
+    stage1_checkpoint = resolve_stage1_checkpoint(
+        mvtec_class=args.mvtec_class,
+        checkpoint_arg=args.stage1_checkpoint,
+        stage1_root=args.stage1_checkpoint_dir,
+    )
 
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     datamodule = Stage2DataModule(
@@ -121,7 +146,7 @@ def main():
         learning_rate=args.learning_rate,
         decomposition_weight=args.decomposition_weight,
         fusion_weight=args.fusion_weight,
-        stage1_checkpoint=args.stage1_checkpoint,
+        stage1_checkpoint=stage1_checkpoint,
         artifact_dir=str(artifact_dir),
     )
     logger = CSVLogger(
@@ -145,9 +170,9 @@ def main():
         log_every_n_steps=1,
         logger=logger,
         num_sanity_val_steps=0,
+        deterministic=True,
     )
     trainer.fit(module, datamodule=datamodule)
-    trainer.test(module, datamodule=datamodule, ckpt_path="best")
 
     metrics_path = Path(logger.log_dir) / "metrics.csv"
     plot_output = artifact_dir / "recon_losses.png"
@@ -156,7 +181,8 @@ def main():
     print(f"[stage2 run] run_id={run_id}")
     print(f"[stage2 run] log_dir={logger.log_dir}")
     print(f"[stage2 run] plot={plot_output}")
-    print(f"[stage2 run] test_artifacts={artifact_dir}")
+    print(f"[stage2 run] stage1_init_ckpt={stage1_checkpoint}")
+    print(f"[stage2 run] eval_artifact_dir={artifact_dir}")
     if checkpoint.best_model_path:
         print(f"[stage2 run] best_ckpt={checkpoint.best_model_path}")
 

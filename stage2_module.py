@@ -21,6 +21,7 @@ from dataloader.datamodule import (
     _ensure_decomposition_cache,
 )
 from loss import stage2loss
+from mvtec_metric import compute_imagewise_retrieval_metrics
 from models.restorationnet import AnalyticalRestorationNet
 from perturbation.precompute_stage2_cache import (
     STAGE2_CACHE_ROOT,
@@ -362,12 +363,18 @@ class Stage2LightningModule(pl.LightningModule):
 
         normal_scores = [row["input_restore_mse"] for row in self.test_rows if row["label"] == 0]
         anomaly_scores = [row["input_restore_mse"] for row in self.test_rows if row["label"] == 1]
+        all_scores = [row["input_restore_mse"] for row in self.test_rows]
+        all_labels = [row["label"] for row in self.test_rows]
 
         csv_path = artifact_dir / "test_input_restore_scores.csv"
         with csv_path.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=["path", "label", "input_restore_mse"])
             writer.writeheader()
             writer.writerows(self.test_rows)
+
+        auroc = None
+        if len(set(all_labels)) > 1:
+            auroc = float(compute_imagewise_retrieval_metrics(all_scores, all_labels)["auroc"])
 
         summary_path = artifact_dir / "test_input_restore_summary.txt"
         with summary_path.open("w") as handle:
@@ -380,6 +387,8 @@ class Stage2LightningModule(pl.LightningModule):
             if anomaly_scores:
                 handle.write(f"anomaly_mean_mse: {float(np.mean(anomaly_scores)):.8f}\n")
                 handle.write(f"anomaly_std_mse: {float(np.std(anomaly_scores)):.8f}\n")
+            if auroc is not None:
+                handle.write(f"image_auroc: {auroc:.8f}\n")
 
         try:
             import matplotlib.pyplot as plt
@@ -404,6 +413,8 @@ class Stage2LightningModule(pl.LightningModule):
             self.log("test/normal_mean_mse", float(np.mean(normal_scores)), prog_bar=False)
         if anomaly_scores:
             self.log("test/anomaly_mean_mse", float(np.mean(anomaly_scores)), prog_bar=False)
+        if auroc is not None:
+            self.log("test/image_auroc", auroc, prog_bar=True)
 
         print(f"[stage2 test] wrote scores to {csv_path}")
         print(f"[stage2 test] wrote summary to {summary_path}")
