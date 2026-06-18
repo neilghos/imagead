@@ -39,9 +39,9 @@ def sobel_edges(y: torch.Tensor, gamma: float = 0.5, eps: float = 1e-8) -> torch
     return (edge / edge_max).pow(gamma)
 
 
-def load_image(path: Path, image_size: int) -> torch.Tensor:
+def load_image(path: Path, resize_size: int, image_size: int) -> torch.Tensor:
     image = Image.open(path).convert("RGB")
-    image = TF.resize(image, image_size, interpolation=InterpolationMode.BILINEAR)
+    image = TF.resize(image, resize_size, interpolation=InterpolationMode.BILINEAR)
     image = TF.center_crop(image, [image_size, image_size])
     return TF.to_tensor(image)
 

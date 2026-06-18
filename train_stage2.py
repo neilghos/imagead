@@ -44,7 +44,6 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=4)
-    parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--decomposition-weight", type=float, default=1.0)
     parser.add_argument("--fusion-weight", type=float, default=1.0)
@@ -121,7 +120,6 @@ def main():
         mvtec_class=args.mvtec_class,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
-        image_size=args.image_size,
         val_split=args.val_split,
         data_root=args.data_root,
         clean_cache_root=args.clean_cache_root,

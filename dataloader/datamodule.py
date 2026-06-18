@@ -30,6 +30,8 @@ _CLASSNAMES = [
 DATASETS_PATH = "/data/imageaddatasets/mvtec_anomaly_detection"
 DECOMPOSITION_CACHE_ROOT = "/data/cache/decompositions/mvtec/ycbcr"
 PRECOMPUTE_SCRIPT = "/data/stepdown vision/decomposition/precompute_decomposition.py"
+DEFAULT_RESIZE_SIZE = 256
+DEFAULT_IMAGE_SIZE = 224
 
 
 def _class_cache_root(cache_root: str, cls: str) -> Path:
@@ -53,12 +55,14 @@ def _load_components(class_root: str, image_path: str, cache_root: str) -> dict:
     return {name: value.float() for name, value in sample["components"].items()}
 
 
-def _cache_matches_size(cache_root: str, expected_size: int) -> bool:
+def _cache_matches_size(cache_root: str, expected_resize: int, expected_size: int) -> bool:
     cache_root_path = Path(cache_root)
     sample_path = next(cache_root_path.rglob("*.pt"), None)
     if sample_path is None:
         return False
     sample = torch.load(sample_path, map_location="cpu", weights_only=False)
+    if sample.get("resize_size") != expected_resize or sample.get("image_size") != expected_size:
+        return False
     image = sample["image"]
     if image.shape[-2:] != (expected_size, expected_size):
         return False
@@ -66,11 +70,17 @@ def _cache_matches_size(cache_root: str, expected_size: int) -> bool:
     return first_component.shape[-2:] == (expected_size, expected_size)
 
 
-def _ensure_decomposition_cache(cls: str, source: str, cache_root: str, image_size: int):
+def _ensure_decomposition_cache(
+    cls: str,
+    source: str,
+    cache_root: str,
+    resize_size: int = DEFAULT_RESIZE_SIZE,
+    image_size: int = DEFAULT_IMAGE_SIZE,
+):
     class_root = Path(source) / cls
     cache_root_path = _class_cache_root(cache_root, cls)
     expected_dirs = [cache_root_path / "train", cache_root_path / "test"]
-    if all(path.exists() for path in expected_dirs) and _cache_matches_size(str(cache_root_path), image_size):
+    if all(path.exists() for path in expected_dirs) and _cache_matches_size(str(cache_root_path), resize_size, image_size):
         return
 
     command = [
@@ -83,8 +93,6 @@ def _ensure_decomposition_cache(cls: str, source: str, cache_root: str, image_si
         str(cache_root_path.parent),
         "--split",
         "all",
-        "--image-size",
-        str(image_size),
     ]
     if any(path.exists() for path in expected_dirs):
         command.append("--overwrite")
@@ -101,7 +109,8 @@ class MVTecDataset:
         cls: str,
         source: str = DATASETS_PATH,
         cache_root: str = DECOMPOSITION_CACHE_ROOT,
-        size: int = 224,
+        resize: int = DEFAULT_RESIZE_SIZE,
+        size: int = DEFAULT_IMAGE_SIZE,
     ):
         """
             This constructor is used to initialized an instance of MVTecDataset. It is identified by the following parameters : 
@@ -118,10 +127,11 @@ class MVTecDataset:
         self.cls = cls
         self.source = source
         self.cache_root = cache_root
+        self.resize = resize
         self.size = size
-        _ensure_decomposition_cache(cls, source, cache_root, size)
-        self.train_ds = MVTecTrainDataset(cls, source, cache_root, size)
-        self.test_ds = MVTecTestDataset(cls, source, cache_root, size)
+        _ensure_decomposition_cache(cls, source, cache_root, resize, size)
+        self.train_ds = MVTecTrainDataset(cls, source, cache_root, resize, size)
+        self.test_ds = MVTecTestDataset(cls, source, cache_root, resize, size)
 
     def get_datasets(self):
         """
@@ -176,12 +186,13 @@ class MVTecTrainDataset(ImageFolder):
         cls: str,
         source: str = DATASETS_PATH,
         cache_root: str = DECOMPOSITION_CACHE_ROOT,
-        imagesize: int = 224,
+        resize: int = DEFAULT_RESIZE_SIZE,
+        imagesize: int = DEFAULT_IMAGE_SIZE,
     ):
         super().__init__(
             root=source + "/" + cls + "/" + "train",
             transform=transforms.Compose([
-                transforms.Resize((imagesize, imagesize)),
+                transforms.Resize(resize),
                 transforms.CenterCrop(imagesize),
                 transforms.ToTensor(),
             ])
@@ -190,6 +201,7 @@ class MVTecTrainDataset(ImageFolder):
         self.source = source
         self.class_root = str(Path(source) / cls)
         self.cache_root = str(_class_cache_root(cache_root, cls))
+        self.resize = resize
         self.size = imagesize
 
     def __getitem__(self, index):
@@ -229,17 +241,18 @@ class MVTecTestDataset(ImageFolder):
         cls: str,
         source: str = DATASETS_PATH,
         cache_root: str = DECOMPOSITION_CACHE_ROOT,
-        imagesize: int = 224,
+        resize: int = DEFAULT_RESIZE_SIZE,
+        imagesize: int = DEFAULT_IMAGE_SIZE,
     ):
         super().__init__(
             root=source + "/" + cls + "/" + "test",
             transform=transforms.Compose([
-                transforms.Resize((imagesize, imagesize)),
+                transforms.Resize(resize),
                 transforms.CenterCrop(imagesize),
                 transforms.ToTensor(),
             ]),
             target_transform=transforms.Compose([
-                transforms.Resize((imagesize, imagesize)),
+                transforms.Resize(resize),
                 transforms.CenterCrop(imagesize),
                 transforms.ToTensor(),
             ])
@@ -248,6 +261,7 @@ class MVTecTestDataset(ImageFolder):
         self.source = source
         self.class_root = str(Path(source) / cls)
         self.cache_root = str(_class_cache_root(cache_root, cls))
+        self.resize = resize
         self.size = imagesize
 
     def __getitem__(self, index):

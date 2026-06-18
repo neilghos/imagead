@@ -12,6 +12,7 @@ if str(PARENT_DIR) not in sys.path:
 
 import decomposition.lab_stack as lab_stack
 import decomposition.ycbcr_stack as ycbcr_stack
+from dataloader.datamodule import DEFAULT_IMAGE_SIZE, DEFAULT_RESIZE_SIZE
 
 
 DATA_ROOT = Path("/data/stepdown vision/data/imagenette/imagenette2-320")
@@ -46,7 +47,7 @@ def precompute(args):
             if destination.exists() and not args.overwrite:
                 continue
 
-            image = stack_module.load_image(image_path, args.image_size)
+            image = stack_module.load_image(image_path, DEFAULT_RESIZE_SIZE, DEFAULT_IMAGE_SIZE)
             components = stack_module.decompose(
                 image=image,
                 mid_blur_kernel=args.mid_blur_kernel,
@@ -59,6 +60,8 @@ def precompute(args):
             torch.save(
                 {
                     "stack": stack_name,
+                    "resize_size": DEFAULT_RESIZE_SIZE,
+                    "image_size": DEFAULT_IMAGE_SIZE,
                     "image": image,
                     "components": components,
                     "label": label,
@@ -77,7 +80,6 @@ def parse_args():
     parser.add_argument("--data-root", default=str(DATA_ROOT))
     parser.add_argument("--cache-root", default=str(CACHE_ROOT))
     parser.add_argument("--split", choices=["train", "val", "test", "all"], default="all")
-    parser.add_argument("--image-size", type=int, default=256)
     parser.add_argument("--mid-blur-kernel", type=int, default=17)
     parser.add_argument("--mid-blur-sigma", type=float, default=4.0)
     parser.add_argument("--coarse-blur-kernel", type=int, default=41)

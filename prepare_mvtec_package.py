@@ -18,7 +18,6 @@ def parse_args():
     parser.add_argument("--data-root", type=str, default=DATASETS_PATH)
     parser.add_argument("--clean-cache-root", type=str, default=DECOMPOSITION_CACHE_ROOT)
     parser.add_argument("--stage2-cache-root", type=str, default=str(STAGE2_CACHE_ROOT))
-    parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -36,8 +35,6 @@ def prepare_single_class(args, mvtec_class: str):
         args.clean_cache_root,
         "--stage2-cache-root",
         args.stage2_cache_root,
-        "--image-size",
-        str(args.image_size),
         "--seed",
         str(args.seed),
     ]

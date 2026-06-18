@@ -14,7 +14,13 @@ PARENT_DIR = CURRENT_DIR.parent
 if str(PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(PARENT_DIR))
 
-from dataloader.datamodule import DECOMPOSITION_CACHE_ROOT, DATASETS_PATH, _ensure_decomposition_cache
+from dataloader.datamodule import (
+    DATASETS_PATH,
+    DEFAULT_IMAGE_SIZE,
+    DEFAULT_RESIZE_SIZE,
+    DECOMPOSITION_CACHE_ROOT,
+    _ensure_decomposition_cache,
+)
 from determinism import make_deterministic
 from decomposition import ycbcr_stack
 from perturbation.colorperturber import ColorPerturber
@@ -80,7 +86,13 @@ def uint8_image_to_tensor(image):
     return torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
 
 
-def _cache_complete(cache_root: Path, class_root: Path, samples: list[tuple[Path, str, int]], image_size: int) -> bool:
+def _cache_complete(
+    cache_root: Path,
+    class_root: Path,
+    samples: list[tuple[Path, str, int]],
+    resize_size: int,
+    image_size: int,
+) -> bool:
     expected_count = len(samples) * len(STAGE2_COMBINATIONS)
     if not cache_root.exists():
         return False
@@ -95,6 +107,8 @@ def _cache_complete(cache_root: Path, class_root: Path, samples: list[tuple[Path
     return (
         "perturbed_image" in sample
         and "perturbed_components" in sample
+        and sample.get("resize_size") == resize_size
+        and sample.get("image_size") == image_size
         and sample["perturbed_image"].shape[-2:] == (image_size, image_size)
         and next(iter(sample["perturbed_components"].values())).shape[-2:] == (image_size, image_size)
     )
@@ -110,11 +124,10 @@ def precompute(args):
         cls=args.mvtec_class,
         source=args.data_root,
         cache_root=args.clean_cache_root,
-        image_size=args.image_size,
     )
 
     samples = ycbcr_stack.iter_samples(class_root, "train")
-    if _cache_complete(stage2_cache_root, class_root, samples, args.image_size) and not args.overwrite:
+    if _cache_complete(stage2_cache_root, class_root, samples, DEFAULT_RESIZE_SIZE, DEFAULT_IMAGE_SIZE) and not args.overwrite:
         print(f"[stage2 cache] already complete: {stage2_cache_root}")
         return
 
@@ -165,6 +178,8 @@ def precompute(args):
             destination.parent.mkdir(parents=True, exist_ok=True)
             torch.save(
                 {
+                    "resize_size": DEFAULT_RESIZE_SIZE,
+                    "image_size": DEFAULT_IMAGE_SIZE,
                     "image_raw": clean_image,
                     "perturbed_image": perturbed_image,
                     "components": clean_components,
@@ -186,7 +201,6 @@ def parse_args():
     parser.add_argument("--data-root", default=DATASETS_PATH)
     parser.add_argument("--clean-cache-root", default=DECOMPOSITION_CACHE_ROOT)
     parser.add_argument("--stage2-cache-root", default=str(STAGE2_CACHE_ROOT))
-    parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--mid-blur-kernel", type=int, default=17)
     parser.add_argument("--mid-blur-sigma", type=float, default=4.0)
     parser.add_argument("--coarse-blur-kernel", type=int, default=41)

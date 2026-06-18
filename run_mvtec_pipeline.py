@@ -27,7 +27,6 @@ def parse_args():
     parser.add_argument("--data-root", type=str, default=DATASETS_PATH)
     parser.add_argument("--clean-cache-root", type=str, default=DECOMPOSITION_CACHE_ROOT)
     parser.add_argument("--stage2-cache-root", type=str, default=str(STAGE2_CACHE_ROOT))
-    parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--stage1-epochs", type=int, default=50)
@@ -160,8 +159,6 @@ def main():
                 args.clean_cache_root,
                 "--stage2-cache-root",
                 args.stage2_cache_root,
-                "--image-size",
-                str(args.image_size),
             ]
         )
 
@@ -177,8 +174,6 @@ def main():
                 str(args.batch_size),
                 "--num-workers",
                 str(args.num_workers),
-                "--image-size",
-                str(args.image_size),
                 "--val-split",
                 str(args.val_split),
                 "--seed",
@@ -210,8 +205,6 @@ def main():
                 str(args.batch_size),
                 "--num-workers",
                 str(args.num_workers),
-                "--image-size",
-                str(args.image_size),
                 "--val-split",
                 str(args.val_split),
                 "--seed",
@@ -243,8 +236,6 @@ def main():
                 str(args.batch_size),
                 "--num-workers",
                 str(args.num_workers),
-                "--image-size",
-                str(args.image_size),
                 "--val-split",
                 str(args.val_split),
                 "--seed",

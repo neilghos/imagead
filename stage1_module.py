@@ -9,6 +9,8 @@ from torch.utils.data import DataLoader, random_split
 
 from dataloader.datamodule import (
     DATASETS_PATH,
+    DEFAULT_IMAGE_SIZE,
+    DEFAULT_RESIZE_SIZE,
     DECOMPOSITION_CACHE_ROOT,
     MVTecTrainDataset,
     _ensure_decomposition_cache,
@@ -35,7 +37,6 @@ class Stage1DataModule(pl.LightningDataModule):
         mvtec_class: str,
         batch_size: int,
         num_workers: int,
-        image_size: int,
         val_split: float,
         data_root: str = DATASETS_PATH,
         cache_root: str = DECOMPOSITION_CACHE_ROOT,
@@ -45,7 +46,8 @@ class Stage1DataModule(pl.LightningDataModule):
         self.mvtec_class = mvtec_class
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.image_size = image_size
+        self.resize_size = DEFAULT_RESIZE_SIZE
+        self.image_size = DEFAULT_IMAGE_SIZE
         self.val_split = val_split
         self.data_root = data_root
         self.cache_root = cache_root
@@ -59,12 +61,14 @@ class Stage1DataModule(pl.LightningDataModule):
             cls=self.mvtec_class,
             source=self.data_root,
             cache_root=self.cache_root,
+            resize_size=self.resize_size,
             image_size=self.image_size,
         )
         train_full = MVTecTrainDataset(
             cls=self.mvtec_class,
             source=self.data_root,
             cache_root=self.cache_root,
+            resize=self.resize_size,
             imagesize=self.image_size,
         )
         self.full_train_size = len(train_full)

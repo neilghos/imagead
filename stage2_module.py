@@ -15,6 +15,8 @@ from torch.utils.data import DataLoader, Dataset, random_split
 
 from dataloader.datamodule import (
     DATASETS_PATH,
+    DEFAULT_IMAGE_SIZE,
+    DEFAULT_RESIZE_SIZE,
     DECOMPOSITION_CACHE_ROOT,
     MVTecTestDataset,
     MVTecTrainDataset,
@@ -45,7 +47,7 @@ COMPONENT_NAMES = [
 PRECOMPUTE_STAGE2_SCRIPT = "/data/stepdown vision/perturbation/precompute_stage2_cache.py"
 
 
-def _stage2_cache_complete(cache_root: str, subset: Dataset, image_size: int) -> bool:
+def _stage2_cache_complete(cache_root: str, subset: Dataset, resize_size: int, image_size: int) -> bool:
     if not hasattr(subset, "indices") or not hasattr(subset, "dataset"):
         return False
     base_dataset = subset.dataset
@@ -62,7 +64,9 @@ def _stage2_cache_complete(cache_root: str, subset: Dataset, image_size: int) ->
         return False
     probe = torch.load(probe_path, map_location="cpu", weights_only=False)
     return (
-        probe["perturbed_image"].shape[-2:] == (image_size, image_size)
+        probe.get("resize_size") == resize_size
+        and probe.get("image_size") == image_size
+        and probe["perturbed_image"].shape[-2:] == (image_size, image_size)
         and next(iter(probe["perturbed_components"].values())).shape[-2:] == (image_size, image_size)
     )
 
@@ -72,11 +76,12 @@ def _ensure_stage2_cache(
     data_root: str,
     clean_cache_root: str,
     stage2_cache_root: str,
+    resize_size: int,
     image_size: int,
     train_subset: Dataset,
 ):
     cache_root = stage2_class_cache_root(stage2_cache_root, mvtec_class)
-    if _stage2_cache_complete(str(cache_root), train_subset, image_size):
+    if _stage2_cache_complete(str(cache_root), train_subset, resize_size, image_size):
         return
 
     command = [
@@ -90,8 +95,6 @@ def _ensure_stage2_cache(
         clean_cache_root,
         "--stage2-cache-root",
         stage2_cache_root,
-        "--image-size",
-        str(image_size),
     ]
     if cache_root.exists():
         command.append("--overwrite")
@@ -136,7 +139,6 @@ class Stage2DataModule(pl.LightningDataModule):
         mvtec_class: str,
         batch_size: int,
         num_workers: int,
-        image_size: int,
         val_split: float,
         data_root: str = DATASETS_PATH,
         clean_cache_root: str = DECOMPOSITION_CACHE_ROOT,
@@ -147,7 +149,8 @@ class Stage2DataModule(pl.LightningDataModule):
         self.mvtec_class = mvtec_class
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.image_size = image_size
+        self.resize_size = DEFAULT_RESIZE_SIZE
+        self.image_size = DEFAULT_IMAGE_SIZE
         self.val_split = val_split
         self.data_root = data_root
         self.clean_cache_root = clean_cache_root
@@ -164,6 +167,7 @@ class Stage2DataModule(pl.LightningDataModule):
             cls=self.mvtec_class,
             source=self.data_root,
             cache_root=self.clean_cache_root,
+            resize_size=self.resize_size,
             image_size=self.image_size,
         )
 
@@ -172,6 +176,7 @@ class Stage2DataModule(pl.LightningDataModule):
                 cls=self.mvtec_class,
                 source=self.data_root,
                 cache_root=self.clean_cache_root,
+                resize=self.resize_size,
                 imagesize=self.image_size,
             )
             self.full_train_size = len(train_full)
@@ -188,6 +193,7 @@ class Stage2DataModule(pl.LightningDataModule):
                 data_root=self.data_root,
                 clean_cache_root=self.clean_cache_root,
                 stage2_cache_root=self.stage2_cache_root,
+                resize_size=self.resize_size,
                 image_size=self.image_size,
                 train_subset=train_subset,
             )
@@ -203,6 +209,7 @@ class Stage2DataModule(pl.LightningDataModule):
                 cls=self.mvtec_class,
                 source=self.data_root,
                 cache_root=self.clean_cache_root,
+                resize=self.resize_size,
                 imagesize=self.image_size,
             )
 
@@ -429,7 +436,6 @@ if __name__ == "__main__":
         mvtec_class="bottle",
         batch_size=2,
         num_workers=0,
-        image_size=224,
         val_split=0.1,
     )
     dm.setup("fit")
