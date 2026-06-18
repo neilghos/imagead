@@ -30,4 +30,23 @@ def stage1loss(
 
 
 def stage2loss(*args, **kwargs) -> Dict[str, torch.Tensor]:
-    return {}
+    predicted_components: Dict[str, torch.Tensor] = kwargs["predicted_components"]
+    target_components: Dict[str, torch.Tensor] = kwargs["target_components"]
+    predicted_rgb: torch.Tensor = kwargs["predicted_rgb"]
+    target_rgb: torch.Tensor = kwargs["target_rgb"]
+    decomposition_weight: float = kwargs.get("decomposition_weight", 1.0)
+    fusion_weight: float = kwargs.get("fusion_weight", 1.0)
+
+    component_losses = []
+    for name in sorted(target_components.keys()):
+        component_losses.append(F.mse_loss(predicted_components[name], target_components[name]))
+
+    decomposition_loss = torch.stack(component_losses).mean()
+    fusion_loss = F.mse_loss(predicted_rgb, target_rgb)
+    total_loss = decomposition_weight * decomposition_loss + fusion_weight * fusion_loss
+
+    return {
+        "loss": total_loss,
+        "decomposition_loss": decomposition_loss,
+        "fusion_loss": fusion_loss,
+    }

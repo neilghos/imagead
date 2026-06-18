@@ -21,6 +21,7 @@ from dataloader.datamodule import DATASETS_PATH as MVTEC_ROOT, _CLASSNAMES as MV
 DEFAULT_IMAGE = "/data/imageaddatasets/mvtec_anomaly_detection/bottle/train/good/000.png"
 DEFAULT_PLOT = "/data/stepdown vision/plots/perturbation/color_damage_preview.png"
 RSNA_ROOT = "/data/imageaddatasets/rsna-pneumonia-detection-challenge"
+TEXTURE_CLASSES = {"carpet", "grid", "leather", "tile", "wood"}
 
 
 def load_rgb_image(path: str | Path, image_size: int | None = None) -> np.ndarray:
@@ -49,9 +50,10 @@ def save_preview_grid(images: list[np.ndarray], titles: list[str], output_path: 
 
 
 class ColorPerturber:
-    def __init__(self, seed: int = 42, domain: str = "industrial"):
+    def __init__(self, seed: int = 42, domain: str = "industrial", class_hint: str | None = None):
         self.rng = random.Random(seed)
         self.domain = domain
+        self.class_hint = class_hint
 
     def apply_all(self, image: np.ndarray) -> dict[str, np.ndarray]:
         return {
@@ -63,19 +65,29 @@ class ColorPerturber:
         }
 
     def _foreground_mask(self, image: np.ndarray) -> np.ndarray:
-            if self.domain == "medical":
-                return np.ones(image.shape[:2], dtype=bool)
-                
-            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            
-            # The foolproof corner check that we know works perfectly
-            if thresh[0, 0] == 255 and thresh[-1, -1] == 255:
-                thresh = cv2.bitwise_not(thresh)
-                
-            mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        if self.domain == "medical":
+            return np.ones(image.shape[:2], dtype=bool)
+
+        if self.class_hint in TEXTURE_CLASSES:
+            return np.ones(image.shape[:2], dtype=bool)
+
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        if thresh[0, 0] == 255 and thresh[-1, -1] == 255:
+            thresh = cv2.bitwise_not(thresh)
+
+        mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        if num_labels <= 1:
             return mask.astype(bool)
+
+        component_areas = stats[1:, cv2.CC_STAT_AREA]
+        largest_idx = int(component_areas.argmax()) + 1
+        largest_mask = labels == largest_idx
+        if largest_mask.mean() < 0.01:
+            return mask.astype(bool)
+        return largest_mask
 
     def _sample_point_in_mask(self, mask: np.ndarray) -> tuple[int, int]:
         ys, xs = np.where(mask)
@@ -226,6 +238,7 @@ def parse_args():
     parser.add_argument("--output-path", type=str, default=DEFAULT_PLOT)
     parser.add_argument("--preview-suite", action="store_true")
     parser.add_argument("--domain", choices=["industrial", "medical"], default="industrial")
+    parser.add_argument("--class-hint", type=str, default=None)
     return parser.parse_args()
 
 
@@ -252,10 +265,10 @@ def _sample_rsna_paths(limit: int = 6) -> list[Path]:
 
 
 def build_preview_suite(image_size: int, seed: int):
-    mvtec_perturber = ColorPerturber(seed=seed, domain="industrial")
     for cls in MVTEC_CLASSES:
         image_path = _first_mvtec_train_image(cls)
         image = load_rgb_image(image_path, image_size=image_size)
+        mvtec_perturber = ColorPerturber(seed=seed, domain="industrial", class_hint=cls)
         outputs = mvtec_perturber.apply_all(image)
         output_path = Path("/data/stepdown vision/plots/perturbation/mvtec") / cls / "color_damage_preview.png"
         save_preview_grid([outputs[name] for name in outputs], list(outputs.keys()), output_path)
@@ -276,7 +289,7 @@ if __name__ == "__main__":
         build_preview_suite(image_size=args.image_size, seed=args.seed)
     else:
         image = load_rgb_image(args.image_path, image_size=args.image_size)
-        perturber = ColorPerturber(seed=args.seed, domain=args.domain)
+        perturber = ColorPerturber(seed=args.seed, domain=args.domain, class_hint=args.class_hint)
         outputs = perturber.apply_all(image)
         titles = list(outputs.keys())
         images = [outputs[name] for name in titles]
