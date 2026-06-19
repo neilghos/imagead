@@ -10,18 +10,18 @@ from torch.utils.data import DataLoader
 
 _CLASSNAMES = [
     "bottle",
-    "cable",
-    "capsule",
     "carpet",
+    "transistor",
+    "leather",
+    "capsule",
     "grid",
     "hazelnut",
-    "leather",
     "metal_nut",
     "pill",
     "screw",
     "tile",
     "toothbrush",
-    "transistor",
+    "cable",
     "wood",
     "zipper",
 ]
