@@ -176,14 +176,6 @@ def main():
     plot_output = artifact_dir / "recon_losses.png"
     plot_recon_losses(metrics_path, plot_output, args.mvtec_class)
 
-    print(f"[stage2 run] run_id={run_id}")
-    print(f"[stage2 run] log_dir={logger.log_dir}")
-    print(f"[stage2 run] plot={plot_output}")
-    print(f"[stage2 run] stage1_init_ckpt={stage1_checkpoint}")
-    print(f"[stage2 run] eval_artifact_dir={artifact_dir}")
-    if checkpoint.best_model_path:
-        print(f"[stage2 run] best_ckpt={checkpoint.best_model_path}")
-
 
 if __name__ == "__main__":
     main()

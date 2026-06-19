@@ -200,9 +200,6 @@ def save_outputs(
     plt.savefig(artifact_dir / "test_input_restore_hist.png", dpi=200)
     plt.close()
 
-    print(f"[patchcore_eval] wrote scores to {csv_path}")
-    print(f"[patchcore_eval] wrote summary to {summary_path}")
-    print(f"[patchcore_eval] wrote final results to {final_results_path}")
 
 
 def main():

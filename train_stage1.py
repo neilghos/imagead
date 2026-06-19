@@ -135,11 +135,7 @@ def run_single_class(args, mvtec_class: str):
     metrics_path = Path(logger.log_dir) / "metrics.csv"
     plot_output = Path(args.plot_dir) / mvtec_class / run_id / "recon_losses.png"
     plot_recon_losses(metrics_path, plot_output, mvtec_class)
-    print(f"[stage1 run] run_id={run_id}")
-    print(f"[stage1 run] log_dir={logger.log_dir}")
-    print(f"[stage1 run] plot={plot_output}")
-    if checkpoint.best_model_path:
-        print(f"[stage1 run] best_ckpt={checkpoint.best_model_path}")
+
 
 
 def main():
